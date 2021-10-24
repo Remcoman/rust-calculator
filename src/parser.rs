@@ -75,7 +75,7 @@ pub fn parse(s: &str, in_group: bool) -> Result<(usize, Vec<Token>), CalculatorE
                         consumed += items_read;
                         state = State::FromNumber;
                     } else {
-                        return Err(CalculatorError::ExpectedNumberOrGroup);
+                        return Err(CalculatorError::ParseError("Expected number or group"));
                     }
                 }
             }
@@ -84,9 +84,15 @@ pub fn parse(s: &str, in_group: bool) -> Result<(usize, Vec<Token>), CalculatorE
                     let v: Number = {
                         let num = &s[start_index..consumed];
                         if num.find('.').is_some() {
-                            Number::Float(num.parse().or(Err(CalculatorError::InvalidNumber))?)
+                            Number::Float(
+                                num.parse()
+                                    .or(Err(CalculatorError::ParseError("Invalid number")))?,
+                            )
                         } else {
-                            Number::Integer(num.parse().or(Err(CalculatorError::InvalidNumber))?)
+                            Number::Integer(
+                                num.parse()
+                                    .or(Err(CalculatorError::ParseError("Invalid number")))?,
+                            )
                         }
                     };
                     tokens.push(Token::Value(v));

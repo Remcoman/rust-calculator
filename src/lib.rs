@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::Peekable};
+use std::{cell::RefCell, collections::HashMap, iter::Peekable};
 
 mod error;
 mod parser;
@@ -14,12 +14,17 @@ type SolverResult = std::result::Result<Number, CalculatorError>;
 
 struct Solver<'a> {
     tokens: Vec<Token>,
+    token_stack: RefCell<Vec<String>>,
     calculator: &'a mut Calculator,
 }
 
 impl<'a> Solver<'a> {
     pub fn new(calculator: &'a mut Calculator, tokens: Vec<Token>) -> Self {
-        Self { tokens, calculator }
+        Self {
+            tokens,
+            calculator,
+            token_stack: RefCell::new(vec![]),
+        }
     }
 
     fn solve_token(&self, token: &Token) -> SolverResult {
@@ -27,13 +32,31 @@ impl<'a> Solver<'a> {
             Token::Value(v) => Ok(v.clone()),
             Token::Group(tokens) => self.solve_token_list(tokens),
             Token::Identifier(ident) => {
+                if self.token_stack.borrow().contains(ident) {
+                    return Err(CalculatorError::SolveError(
+                        "A used variable was already used as part of the calculation",
+                    ));
+                }
+
+                // push the used token on the stack
+                {
+                    self.token_stack.borrow_mut().push(ident.clone())
+                }
+
                 let tokens = self
                     .calculator
                     .assignments
                     .get(ident)
-                    .ok_or_else(|| CalculatorError::UndefinedVariable(ident.clone()))?;
+                    .ok_or_else(|| CalculatorError::UndefinedVariable(ident.to_owned()))?;
 
-                self.solve_token_list(tokens)
+                let solved = self.solve_token_list(tokens);
+
+                // remove it again from the stack
+                {
+                    self.token_stack.borrow_mut().pop();
+                }
+
+                solved
             }
             _ => unimplemented!(),
         }
@@ -45,7 +68,9 @@ impl<'a> Solver<'a> {
         let first_token = {
             let mut token = iter.next().unwrap();
             if let Some(Token::Assignment) = iter.peek() {
-                token = iter.nth(1).expect("Expected token after assignment");
+                token = iter.nth(1).ok_or(CalculatorError::SolveError(
+                    "Expected token after assignment",
+                ))?;
             }
             token
         };
@@ -68,7 +93,10 @@ impl<'a> Solver<'a> {
         {
             iter.next();
 
-            let mut rhs = self.solve_token(iter.next().expect("Expected value after operator"))?;
+            let mut rhs = iter
+                .next()
+                .ok_or(CalculatorError::SolveError("Expected value after operator"))
+                .and_then(|op| self.solve_token(op))?;
 
             lookahead = iter.peek().copied();
 

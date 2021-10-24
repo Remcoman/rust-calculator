@@ -2,8 +2,8 @@ use std::{error::Error, fmt::Display};
 
 #[derive(Debug)]
 pub enum CalculatorError {
-    ExpectedNumberOrGroup,
-    InvalidNumber,
+    ParseError(&'static str),
+    SolveError(&'static str),
     UndefinedVariable(String),
 }
 
@@ -15,11 +15,8 @@ impl Display for CalculatorError {
             Self::UndefinedVariable(name) => {
                 write!(f, "unable to find variable with name {}", name)
             }
-            Self::ExpectedNumberOrGroup => {
-                write!(f, "Expected a number but got something else")
-            }
-            Self::InvalidNumber => {
-                write!(f, "Invalid number")
+            Self::ParseError(message) | Self::SolveError(message) => {
+                write!(f, "{}", message)
             }
         }
     }
