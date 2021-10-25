@@ -27,6 +27,4 @@ fn main() {
             }
         }
     }
-
-    println!("you said: {}", line);
 }

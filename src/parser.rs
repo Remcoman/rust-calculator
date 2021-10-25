@@ -2,6 +2,8 @@ use super::error::CalculatorError;
 
 use super::types::{Number, Operator};
 
+const NULL: u8 = b'\0';
+
 enum State {
     Idle,
     Number(usize),
@@ -12,7 +14,7 @@ enum State {
     FromAssignment,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Value(Number),
     Identifier(String),
@@ -39,7 +41,7 @@ fn is_alpha(c: u8) -> bool {
 }
 
 fn is_whitespace(c: u8) -> bool {
-    matches!(c, b' ')
+    matches!(c, b' ' | b'\r' | b'\n')
 }
 
 fn get_operator(c: u8) -> Option<Operator> {
@@ -52,14 +54,18 @@ fn get_operator(c: u8) -> Option<Operator> {
     }
 }
 
-pub fn parse(s: &str, in_group: bool) -> Result<(usize, Vec<Token>), CalculatorError> {
+fn parse_inner(s: &str, in_group: bool) -> Result<(usize, Vec<Token>), CalculatorError> {
     let mut state: State = State::Idle;
     let mut tokens: Vec<Token> = vec![];
     let mut consumed = 0;
     let bytes = s.as_bytes();
 
-    while consumed < bytes.len() {
-        let c = bytes[consumed];
+    while consumed <= bytes.len() {
+        let c = if consumed < bytes.len() {
+            bytes[consumed]
+        } else {
+            NULL
+        };
 
         match state {
             State::Idle | State::FromOperator | State::FromAssignment => {
@@ -70,7 +76,7 @@ pub fn parse(s: &str, in_group: bool) -> Result<(usize, Vec<Token>), CalculatorE
                     state = State::Identifier(consumed);
                 } else if !is_whitespace(c) {
                     if c == b'(' {
-                        let (items_read, group_tokens) = parse(&s[consumed + 1..], true)?;
+                        let (items_read, group_tokens) = parse_inner(&s[consumed + 1..], true)?;
                         tokens.push(Token::Group(group_tokens));
                         consumed += items_read;
                         state = State::FromNumber;
@@ -135,4 +141,50 @@ pub fn parse(s: &str, in_group: bool) -> Result<(usize, Vec<Token>), CalculatorE
     }
 
     Ok((consumed, tokens))
+}
+
+pub fn parse(s: &str) -> Result<Vec<Token>, CalculatorError> {
+    parse_inner(s, false).map(|(_, tokens)| tokens)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        parser::{parse, Token},
+        types::{Number, Operator},
+    };
+
+    #[test]
+    fn can_parse_simple_calculations() {
+        let tokens = parse("1+1").unwrap();
+        assert_eq!(
+            tokens.as_slice(),
+            [
+                Token::Value(Number::Integer(1)),
+                Token::Operator(Operator::Add),
+                Token::Value(Number::Integer(1))
+            ]
+        )
+    }
+
+    #[test]
+    fn can_parse_grouped_calculations() {
+        let tokens = parse("(1+2)*(3*4)").unwrap();
+        assert_eq!(
+            tokens.as_slice(),
+            [
+                Token::Group(vec![
+                    Token::Value(Number::Integer(1)),
+                    Token::Operator(Operator::Add),
+                    Token::Value(Number::Integer(2))
+                ]),
+                Token::Operator(Operator::Multiply),
+                Token::Group(vec![
+                    Token::Value(Number::Integer(3)),
+                    Token::Operator(Operator::Multiply),
+                    Token::Value(Number::Integer(4))
+                ]),
+            ]
+        )
+    }
 }

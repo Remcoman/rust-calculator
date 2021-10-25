@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
     Add,
     Multiply,
@@ -28,7 +28,7 @@ impl Operator {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Number {
     Integer(i32),
     Float(f32),
